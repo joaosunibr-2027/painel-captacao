@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Captação</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;color:#0f172a;font-size:14px}
+header{background:#0f172a;color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:20px}
+header small{color:#cbd5e1}
+main{max-width:1280px;margin:0 auto;padding:16px}
+button{cursor:pointer;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:7px 12px;font-size:13px}
+button.pri{background:#2563eb;color:#fff;border-color:#2563eb}
+.card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:15px}
+.grid{display:grid;gap:12px}
+.g6{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+.kpi .t{font-size:11px;text-transform:uppercase;color:#64748b;font-weight:600}
+.kpi .v{font-size:28px;font-weight:700;margin-top:4px}
+.kpi .h{font-size:11px;color:#64748b;margin-top:2px}
+.green{color:#16a34a}.red{color:#dc2626}.yellow{color:#ca8a04}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.filters label{display:flex;flex-direction:column;font-size:11px;color:#64748b;font-weight:600;gap:3px}
+.filters select,.filters input[type=date]{height:32px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px;font-size:13px;background:#fff}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tabs button.on{background:#0f172a;color:#fff;border-color:#0f172a}
+.bar{background:#e2e8f0;border-radius:5px;height:22px;overflow:hidden;display:flex}
+.bar>div{height:100%}
+.row{margin-bottom:10px}
+.row .l{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:3px}
+.row .l span:last-child{color:#64748b;text-align:right}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;color:#64748b;border-bottom:1px solid #e2e8f0;padding:6px 4px}
+td{border-bottom:1px solid #f1f5f9;padding:6px 4px}
+.r{text-align:right}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}
+.note{font-size:11px;color:#64748b;margin-top:8px}
+.warn{background:#fefce8;border:1px solid #fde047;color:#713f12;border-radius:8px;padding:10px;font-size:12px;margin-bottom:14px}
+.err{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:10px;margin-bottom:14px}
+.drop{border:2px dashed #94a3b8;border-radius:12px;text-align:center;padding:70px 20px;background:#fff}
+.drop.over{border-color:#2563eb;background:#eff6ff}
+.chip{display:inline-block;background:#f1f5f9;border-radius:999px;padding:3px 10px;margin:3px;font-size:12px}
+.heat{display:grid;grid-template-columns:36px repeat(24,1fr);gap:2px;font-size:10px;color:#64748b;min-width:700px}
+.heat div.c{height:24px;border-radius:3px}
+input.meta{width:80px;height:28px;border:1px solid #cbd5e1;border-radius:6px;text-align:right;padding:0 6px}
+.link{cursor:pointer;color:#2563eb;text-decoration:underline}
+body.tv header .acts,body.tv #filtros,body.tv .tabs{display:none}
+body.tv .kpi .v{font-size:40px}
+.tvexit{display:none;position:fixed;top:8px;right:8px}
+body.tv .tvexit{display:block}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Painel de Captação</h1>
+    <small id="sub">Graduação · Presencial, EAD e Semipresencial</small>
+  </div>
+  <div class="acts">
+    <input type="file" id="file" accept=".csv,.txt" style="display:none">
+    <button class="pri" onclick="document.getElementById('file').click()" id="btnLoad">Carregar base (CSV)</button>
+    <button onclick="toggleTV()">Modo TV</button>
+    <button onclick="clearData()">Limpar dados</button>
+  </div>
+</header>
+<button class="tvexit" onclick="toggleTV()">Sair do modo TV</button>
+<main>
+  <div id="msg"></div>
+  <div id="app"></div>
+</main>
+
+<script>
+/* ===================== CONFIG ===================== */
+var STAGES=[
+ {k:'inscrito parcial',l:'1-Inscrito Parcial',s:'Inscrito parcial',o:1,c:'#9CA3AF'},
+ {k:'confirmado',l:'2-Confirmado',s:'Confirmado',o:2,c:'#60A5FA'},
+ {k:'convocado',l:'3-Convocado',s:'Convocado',o:3,c:'#FBBF24'},
+ {k:'pre-matriculado',l:'4-Pré-Matriculado',s:'Pré-Matriculado',o:4,c:'#F59E0B'},
+ {k:'pre-matricula financeira',l:'5-Pré-Matrícula Financeira',s:'Pré-Mat. Financeira',o:5,c:'#34D399'},
+ {k:'matriculado',l:'6-Matriculado',s:'Matriculado',o:6,c:'#16A34A'},
+ {k:'desistiu',l:'Desistiu',s:'Desistiu',o:7,c:'#EF4444'}
+];
+var COLS={
+ id:['identificador'],etapa:['etapa'],criacao:['data da criacao'],ganho:['momento do ultimo ganho'],
+ perda:['momento da ultima perda'],oferta:['nome - oferta de curso'],pessoaId:['identificador da pessoa'],
+ nome:['nome da pessoa'],resp:['nome do responsavel','responsavel'],processo:['processo seletivo'],
+ status:['status'],canal:['canal'],objecao:['objecao'],obsPerda:['observacoes da perda']
+};
+var SEM_RESP='Sem responsável';
+var KEY='painel-captacao-v2',KEYG='painel-captacao-metas-v2';
+var DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+/* ===================== ESTADO ===================== */
+var S={records:[],report:null,fileName:'',loadedAt:'',tab:'visao',
+ f:{from:'',to:'',processo:'',curso:'',turno:'',resp:'',canal:'',excluirTestes:true},
+ goals:{geral:0,ind:{},mes:{}}};
+var TABS=[['visao','Visão Executiva'],['cursos','Cursos'],['time','Time e Metas'],['desist','Desistências'],['tempo','Tempo'],['qual','Qualidade']];
+
+/* ===================== UTIL ===================== */
+function norm(s){return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&','<':'<','>':'>','"':'&quot;',"'":'&#39;'})[c]})}
+function clean(v){var s=String(v==null?'':v).trim();return(!s||s==='- - -'||s==='-')?null:s}
+function fi(n){return Number(n).toLocaleString('pt-BR')}
+function fp(v){return(v*100).toFixed(1).replace('.',',')+'%'}
+function pc(a,b){return b>0?a/b:0}
+function tone(p){return p>=0.9?'green':p>=0.6?'yellow':'red'}
+function toneColor(p){return p>=0.9?'#16a34a':p>=0.6?'#eab308':'#dc2626'}
+function pDate(v){
+ if(!v)return null;var m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);if(!m)return null;
+ var d=new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0));return isNaN(d.getTime())?null:d}
+function dayKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function uniq(rs,fn){var m={};rs.forEach(function(r){var v=fn(r);if(v)m[v]=1});return Object.keys(m).sort(function(a,b){return a.localeCompare(b,'pt-BR')})}
+
+/* ===================== CSV ===================== */
+function parseCSV(t){
+ t=t.replace(/^\uFEFF/,'');
+ var nl=t.indexOf('\n');var first=t.slice(0,nl>0?nl:t.length);
+ var d=first.split(';').length>first.split(',').length?';':',';
+ var rows=[],row=[],f='',q=false;
+ for(var i=0;i<t.length;i++){var ch=t[i];
+  if(q){if(ch==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=ch}
+  else if(ch==='"')q=true;
+  else if(ch===d){row.push(f);f=''}
+  else if(ch==='\n'){row.push(f);rows.push(row);row=[];f=''}
+  else if(ch!=='\r')f+=ch}
+ if(f!==''||row.length){row.push(f);rows.push(row)}
+ return rows}
+
+function buildRecords(text){
+ var rows=parseCSV(text);if(rows.length<2)throw new Error('Arquivo vazio ou sem linhas de dados.');
+ var hdr=rows[0].map(norm),idx={};
+ hdr.forEach(function(h,i){if(!(h in idx))idx[h]=i});
+ var col={},missing=[];
+ Object.keys(COLS).forEach(function(k){
+  var f=null;COLS[k].forEach(function(a){if(f===null&&a in idx)f=idx[a]});
+  col[k]=f;if(f===null)missing.push(k)});
+ if(col.etapa===null||col.criacao===null)throw new Error('Colunas obrigatórias não encontradas: '+missing.filter(function(m){return m==='etapa'||m==='criacao'}).join(', ')+'. Confira se o arquivo é a exportação do CRM.');
+ var unknown={},seen={},dup=0,tests=0,out=[];
+ for(var i=1;i<rows.length;i++){
+  var row=rows[i];if(row.length===1&&row[0]==='')continue;
+  var g=function(k){return col[k]===null?null:clean(row[col[k]])};
+  var id=g('id')||('linha-'+(i+1));if(seen[id])dup++;seen[id]=1;
+  var et=g('etapa')||'';var st=null;
+  STAGES.forEach(function(s){if(s.k===norm(et))st=s});
+  if(!st)unknown[et||'(vazio)']=(unknown[et||'(vazio)']||0)+1;
+  var of=g('oferta'),curso=null,turno=null;
+  if(of){var p=of.lastIndexOf(' - ');curso=p>0?of.slice(0,p).trim():of;turno=p>0?of.slice(p+3).trim():null}
+  var nome=norm(g('nome')||'');var isT=/\b(teste|test)\b/.test(nome);if(isT)tests++;
+  out.push({id:id,o:st?st.o:null,cr:pDate(g('criacao')),ga:pDate(g('ganho')),pe:pDate(g('perda')),
+   of:of,cu:curso,tu:turno,pid:g('pessoaId'),re:g('resp'),ca:g('canal'),pr:g('processo'),
+   su:g('status'),ob:g('objecao'),op:g('obsPerda'),t:isT})}
+ return{records:out,report:{total:out.length,missing:missing,unknown:unknown,dup:dup,tests:tests}}}
+
+function decodeFile(buf){
+ var u=new TextDecoder('utf-8').decode(buf);
+ return u.indexOf('\uFFFD')<0?u:new TextDecoder('windows-1252').decode(buf)}
+
+/* ===================== PERSISTÊNCIA ===================== */
+function revive(r){r.cr=r.cr?new Date(r.cr):null;r.ga=r.ga?new Date(r.ga):null;r.pe=r.pe?new Date(r.pe):null;return r}
+function saveData(){try{localStorage.setItem(KEY,JSON.stringify({records:S.records,report:S.report,fileName:S.fileName,loadedAt:S.loadedAt}))}catch(e){}}
+function loadSaved(){
+ try{var raw=localStorage.getItem(KEY);if(raw){var s=JSON.parse(raw);S.records=s.records.map(revive);S.report=s.report;S.fileName=s.fileName;S.loadedAt=s.loadedAt}}catch(e){}
+ try{var g=localStorage.getItem(KEYG);if(g)S.goals=JSON.parse(g)}catch(e){}
+ if(!S.goals.ind)S.goals.ind={};
+ if(!S.goals.mes)S.goals.mes={};}
+function saveGoals(){try{localStorage.setItem(KEYG,JSON.stringify(S.goals))}catch(e){}}
+function clearData(){
+ if(!confirm('Remover os dados carregados deste navegador? As metas serão mantidas.'))return;
+ try{localStorage.removeItem(KEY)}catch(e){}
+ S.records=[];S.report=null;S.fileName='';S.loadedAt='';render()}
+
+/* ===================== FILTROS / MÉTRICAS ===================== */
+function filtered(){
+ var f=S.f,from=f.from?new Date(f.from+'T00:00:00'):null,to=f.to?new Date(f.to+'T23:59:59'):null;
+ return S.records.filter(function(r){
+  if(f.excluirTestes&&r.t)return false;
+  if(from&&(!r.cr||r.cr<from))return false;
+  if(to&&(!r.cr||r.cr>to))return false;
+  if(f.processo&&r.pr!==f.processo)return false;
+  if(f.curso&&r.cu!==f.curso)return false;
+  if(f.turno&&r.tu!==f.turno)return false;
+  if(f.canal&&r.ca!==f.canal)return false;
+  if(f.resp&&(r.re||SEM_RESP)!==f.resp)return false;
+  return true})}
+function cnt(rs,o){var n=0;rs.forEach(function(r){if(r.o===o)n++});return n}
+function reached(rs,o){var n=0;rs.forEach(function(r){if(r.o!==null&&r.o>=o&&r.o<=6)n++});return n}
+function summary(rs){
+ var total=rs.length,parcial=cnt(rs,1),mat=cnt(rs,6),des=cnt(rs,7),base=reached(rs,2);
+ return{total:total,parcial:parcial,conf:base,mat:mat,des:des,taxa:pc(mat,base),aband:pc(parcial,total),taxaDes:pc(des,total)}}
+function groupBy(rs,fn){
+ var m={};rs.forEach(function(r){var k=fn(r);(m[k]=m[k]||[]).push(r)});
+ return Object.keys(m).map(function(k){var l=m[k],c={};for(var o=1;o<=7;o++)c[o]=cnt(l,o);
+  return{key:k,total:l.length,c:c,mat:c[6],des:c[7],taxa:pc(c[6],reached(l,2))}})}
+function topTexts(vals,n){
+ var m={};vals.forEach(function(v){if(!v)return;var k=v.replace(/\s+/g,' ').trim().slice(0,90);m[k]=(m[k]||0)+1});
+ return Object.keys(m).map(function(k){return[k,m[k]]}).sort(function(a,b){return b[1]-a[1]}).slice(0,n||10)}
+
+/* ===================== COMPONENTES ===================== */
+function kpi(t,v,h,cls){return'<div class="card kpi"><div class="t">'+t+'</div><div class="v '+(cls||'')+'">'+v+'</div>'+(h?'<div class="h">'+h+'</div>':'')+'</div>'}
+function hbars(items,color){
+ var mx=Math.max.apply(null,items.map(function(i){return i.v}).concat([1]));
+ if(!items.length)return'<p class="note">Sem dados no filtro atual.</p>';
+ return items.map(function(i){return'<div class="row"><div class="l"><span>'+esc(i.l)+'</span><span><b style="color:#0f172a">'+fi(i.v)+'</b></span></div><div class="bar"><div style="width:'+(i.v/mx*100)+'%;background:'+(color||'#2563EB')+'"></div></div></div>'}).join('')}
+function stacked(rows){
+ var mx=Math.max.apply(null,rows.map(function(r){return r.total}).concat([1]));
+ return rows.map(function(r){
+  var segs=STAGES.map(function(s){var v=r.c[s.o];return v?'<div title="'+s.s+': '+v+'" style="width:'+(v/mx*100)+'%;background:'+s.c+'"></div>':''}).join('');
+  return'<div class="row"><div class="l"><span>'+esc(r.key)+'</span><span>'+fi(r.total)+' registros · <b style="color:#16a34a">'+fi(r.mat)+' matr.</b></span></div><div class="bar" style="height:20px">'+segs+'</div></div>'}).join('')}
+function legend(){return'<div class="note">'+STAGES.map(function(s){return'<span class="dot" style="background:'+s.c+';margin-right:4px"></span>'+s.s}).join(' &nbsp; ')+'</div>'}
+
+/* ===================== ABAS ===================== */
+function vVisao(rs){
+ var s=summary(rs),max=Math.max(1,reached(rs,1));
+ var des=rs.filter(function(r){return r.o===7}),dsObs=des.filter(function(r){return!r.op}).length;
+ var semR=rs.filter(function(r){return!r.re}).length,semC=rs.filter(function(r){return!r.of}).length;
+ var al=[];
+ if(pc(semR,s.total)>0.05)al.push(['#dc2626',fi(semR)+' registros sem responsável ('+fp(pc(semR,s.total))+')']);
+ if(pc(dsObs,des.length)>0.2)al.push(['#eab308',fi(dsObs)+' desistências sem motivo registrado ('+fp(pc(dsObs,des.length))+')']);
+ if(s.aband>0.4)al.push(['#eab308','Abandono de inscrição em '+fp(s.aband)+' (limite: 40%)']);
+ if(pc(semC,s.total)>0.05)al.push(['#eab308',fi(semC)+' registros sem oferta de curso ('+fp(pc(semC,s.total))+')']);
+ if(!al.length)al.push(['#16a34a','Indicadores de qualidade dentro do esperado.']);
+ var funil=STAGES.slice(0,6).map(function(st,i){
+  var a=reached(rs,st.o),at=cnt(rs,st.o),prev=i?reached(rs,STAGES[i-1].o):null;
+  return'<div class="row"><div class="l"><span><b>'+st.l+'</b></span><span><b style="color:#0f172a">'+fi(a)+'</b> alcançaram · '+fi(at)+' estão aqui agora'+(prev!==null?' · retenção '+fp(pc(a,prev)):'')+'</span></div><div class="bar" style="height:26px"><div style="width:'+(a/max*100)+'%;background:'+st.c+'"></div></div></div>'}).join('');
+ var topM=groupBy(rs,function(r){return r.of||'Sem oferta de curso'}).sort(function(a,b){return b.mat-a.mat}).slice(0,10).map(function(r){return{l:r.key,v:r.mat}});
+ var topA=groupBy(rs,function(r){return r.of||'Sem oferta de curso'}).sort(function(a,b){return b.c[1]-a.c[1]}).slice(0,10).map(function(r){return{l:r.key,v:r.c[1]}});
+ return'<div class="grid g6">'+kpi('Registros',fi(s.total))+kpi('Inscrições concluídas',fi(s.conf),'Confirmado ou além')+kpi('Matriculados',fi(s.mat),'','green')+kpi('Desistências',fi(s.des),fp(s.taxaDes)+' dos registros','red')+kpi('Conversão estimada',fp(s.taxa),'Matriculado ÷ inscrições concluídas')+kpi('Abandono de inscrição',fp(s.aband),'Inscrito parcial ÷ registros',s.aband>0.4?'red':'')+'</div>'
+ +'<div class="grid g2"><div class="card" style="grid-column:span 1"><h3>Funil de captação</h3>'+funil+'<p class="note">A exportação mostra a etapa atual de cada registro. "Alcançaram" soma quem está na etapa ou além dela, sem desistentes. É uma estimativa de posição, não taxa de coorte.</p></div>'
+ +'<div class="card"><h3>Alertas do dia</h3>'+al.map(function(a){return'<p><span class="dot" style="background:'+a[0]+'"></span>'+a[1]+'</p>'}).join('')+'</div></div>'
+ +'<div class="grid g2"><div class="card"><h3>Top 10 ofertas por matrículas</h3>'+hbars(topM,'#16a34a')+'</div><div class="card"><h3>Top 10 ofertas com mais inscrições parciais (abandono)</h3>'+hbars(topA,'#9CA3AF')+'</div></div>'}
+
+function vCursos(rs){
+ var rows=groupBy(rs,function(r){return r.of||'Sem oferta de curso'}).sort(function(a,b){return b.mat-a.mat||b.total-a.total});
+ var sem=rows.filter(function(r){return r.mat===0&&r.key!=='Sem oferta de curso'});
+ var th=STAGES.map(function(s){return'<th class="r">'+s.s+'</th>'}).join('');
+ var tr=rows.map(function(r){return'<tr><td><b>'+esc(r.key)+'</b></td><td class="r">'+fi(r.total)+'</td>'+STAGES.map(function(s){return'<td class="r">'+fi(r.c[s.o])+'</td>'}).join('')+'<td class="r">'+fp(r.taxa)+'</td></tr>'}).join('');
+ return'<div class="card"><h3>Top 12 ofertas por matrículas (distribuição por etapa)</h3>'+stacked(rows.slice(0,12))+legend()+'</div>'
+ +'<div class="card scroll"><h3>Ranking de ofertas</h3><table><thead><tr><th>Oferta</th><th class="r">Total</th>'+th+'<th class="r">Conversão est.</th></tr></thead><tbody>'+tr+'</tbody></table></div>'
+ +'<div class="card"><h3>Ofertas sem nenhuma matrícula no filtro atual ('+sem.length+')</h3>'+(sem.length?sem.map(function(r){return'<span class="chip">'+esc(r.key)+' · '+fi(r.total)+'</span>'}).join(''):'<p class="note">Todas as ofertas têm ao menos uma matrícula.</p>')+'</div>'}
+
+function vTime(rs){
+ var s=summary(rs),g=S.goals,p=pc(s.mat,g.geral);
+ var rows=groupBy(rs,function(r){return r.re||SEM_RESP}).sort(function(a,b){return b.mat-a.mat||b.total-a.total});
+ var medal=['🥇','🥈','🥉'];
+ var tr=rows.map(function(r,i){
+  var m=g.ind[r.key]||0,pp=pc(r.mat,m);
+  return'<tr><td style="font-size:18px">'+(medal[i]||(i+1))+'</td><td><span class="link" data-r="'+esc(r.key)+'" onclick="pickResp(this.dataset.r)">'+esc(r.key)+'</span></td><td class="r">'+fi(r.total)+'</td><td class="r"><b>'+fi(r.mat)+'</b></td><td class="r">'+fi(r.des)+'</td><td class="r">'+fp(r.taxa)+'</td>'
+  +'<td class="r"><input class="meta" type="number" min="0" value="'+(m||'')+'" data-r="'+esc(r.key)+'" onchange="setInd(this.dataset.r,this.value)"></td>'
+  +'<td style="min-width:200px"><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1;height:14px"><div style="width:'+Math.min(pp*100,100)+'%;background:'+toneColor(pp)+'"></div></div><b class="'+tone(pp)+'" style="width:50px;text-align:right">'+(m?fp(pp):'—')+'</b></div></td></tr>'}).join('');
+ return'<div class="card"><h3>Meta geral de matrículas</h3><div style="display:flex;flex-wrap:wrap;gap:30px;align-items:flex-end">'
+ +'<label class="note">Meta<br><input class="meta" style="width:120px;height:34px" type="number" min="0" value="'+(g.geral||'')+'" onchange="setGeral(this.value)"></label>'
+ +'<div><div class="note">Realizado</div><div style="font-size:32px;font-weight:700" class="green">'+fi(s.mat)+'</div></div>'
+ +'<div><div class="note">Faltam</div><div style="font-size:32px;font-weight:700">'+fi(Math.max(g.geral-s.mat,0))+'</div></div>'
+ +'<div><div class="note">Atingimento</div><div style="font-size:32px;font-weight:700" class="'+tone(p)+'">'+(g.geral?fp(p):'—')+'</div></div></div>'
+ +'<div class="bar" style="height:22px;margin-top:12px"><div style="width:'+Math.min(p*100,100)+'%;background:'+toneColor(p)+'"></div></div></div>'
+ +cardMeses(rs)
+ +'<div class="card scroll"><h3>Ranking de responsáveis</h3><table><thead><tr><th>#</th><th>Responsável</th><th class="r">Registros</th><th class="r">Matrículas</th><th class="r">Desist.</th><th class="r">Conversão est.</th><th class="r">Meta</th><th>Progresso</th></tr></thead><tbody>'+tr+'</tbody></table>'
+ +'<p class="note">Farol: verde ≥ 90% da meta, amarelo 60–89%, vermelho < 60%. Clique no nome para filtrar. As metas ficam salvas neste navegador. Se a coluna do responsável não existir no CSV, tudo aparece como "'+SEM_RESP+'".</p></div>'}
+
+function vDesist(rs){
+ var d=rs.filter(function(r){return r.o===7}),com=d.filter(function(r){return r.op}).length;
+ var byC=groupBy(d,function(r){return r.of||'Sem oferta'}).sort(function(a,b){return b.total-a.total}).slice(0,10).map(function(r){return{l:r.key,v:r.total}});
+ var days=d.filter(function(r){return r.cr&&r.pe}).map(function(r){return(r.pe-r.cr)/86400000});
+ var B=[['Mesmo dia',function(x){return x<1}],['1–2 dias',function(x){return x>=1&&x<3}],['3–7 dias',function(x){return x>=3&&x<8}],['8–15 dias',function(x){return x>=8&&x<16}],['16+ dias',function(x){return x>=16}]];
+ var hist=B.map(function(b){return{l:b[0],v:days.filter(b[1]).length}});
+ var mot=topTexts(d.map(function(r){return r.op})),obj=topTexts(rs.map(function(r){return r.ob}));
+ var li=function(a){return a.length?a.map(function(x){return'<div class="row"><div class="l"><span>'+esc(x[0])+'</span><b>'+x[1]+'</b></div></div>'}).join(''):'<p class="note">Nenhum texto preenchido nos registros filtrados.</p>'};
+ return'<div class="grid g6">'+kpi('Desistências',fi(d.length),'','red')+kpi('% dos registros',fp(pc(d.length,rs.length)))+kpi('Com observação',fi(com))+kpi('Sem observação',fi(d.length-com),'',d.length-com?'yellow':'')+'</div>'
+ +'<div class="grid g2"><div class="card"><h3>Top 10 ofertas com desistência</h3>'+hbars(byC,'#EF4444')+'</div><div class="card"><h3>Tempo entre criação e desistência</h3>'+hbars(hist,'#F59E0B')+'<p class="note">Calculado com Data da criação e Momento da última perda.</p></div></div>'
+ +'<div class="grid g2"><div class="card"><h3>Observações da perda mais frequentes</h3>'+li(mot)+'<p class="note">Texto livre agrupado por igualdade. Para uma análise confiável, padronize o preenchimento ou crie o campo "Motivo da desistência" no CRM.</p></div><div class="card"><h3>Objeções mais registradas</h3>'+li(obj)+'</div></div>'}
+
+function vTempo(rs){
+ var m={};
+ rs.forEach(function(r){
+  if(r.cr){var k=dayKey(r.cr);(m[k]=m[k]||{c:0,m:0}).c++}
+  if(r.o===6&&r.ga){var k2=dayKey(r.ga);(m[k2]=m[k2]||{c:0,m:0}).m++}});
+ var days=Object.keys(m).sort(),W=900,H=260,P=34;
+ var mx=Math.max.apply(null,days.map(function(d){return Math.max(m[d].c,m[d].m)}).concat([1]));
+ var pts=function(key){return days.map(function(d,i){var x=P+(days.length>1?i/(days.length-1):0.5)*(W-P-10),y=H-P-(m[d][key]/mx)*(H-P-10);return x.toFixed(1)+','+y.toFixed(1)}).join(' ')};
+ var lbl=days.length?[0,Math.floor(days.length/2),days.length-1].filter(function(v,i,a){return a.indexOf(v)===i}).map(function(i){var x=P+(days.length>1?i/(days.length-1):0.5)*(W-P-10);return'<text x="'+x+'" y="'+(H-10)+'" font-size="11" fill="#64748b" text-anchor="middle">'+days[i].split('-').reverse().join('/')+'</text>'}).join(''):'';
+ var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto"><line x1="'+P+'" y1="'+(H-P)+'" x2="'+W+'" y2="'+(H-P)+'" stroke="#cbd5e1"/><text x="4" y="14" font-size="11" fill="#64748b">'+mx+'</text>'+lbl
+  +'<polyline fill="none" stroke="#2563EB" stroke-width="2" points="'+pts('c')+'"/><polyline fill="none" stroke="#16a34a" stroke-width="2" points="'+pts('m')+'"/></svg>'
+  +'<div class="note"><span class="dot" style="background:#2563EB"></span>Registros criados &nbsp; <span class="dot" style="background:#16a34a"></span>Matrículas (por data de ganho)</div>';
+ var h=[];for(var a=0;a<7;a++){h.push(new Array(24).fill(0))}
+ rs.forEach(function(r){if(r.cr)h[(r.cr.getDay()+6)%7][r.cr.getHours()]++});
+ var hm=Math.max.apply(null,[].concat.apply([],h).concat([1]));
+ var grid='<div class="heat"><div></div>'+Array.from({length:24},function(_,i){return'<div style="text-align:center">'+i+'</div>'}).join('');
+ h.forEach(function(row,wd){grid+='<div style="display:flex;align-items:center">'+DIAS[wd]+'</div>'+row.map(function(v,hr){return'<div class="c" title="'+DIAS[wd]+' '+hr+'h: '+v+'" style="background:rgba(37,99,235,'+(v?0.15+0.85*v/hm:0.05)+')"></div>'}).join('')});
+ grid+='</div>';
+ return'<div class="card"><h3>Evolução diária</h3>'+svg+'</div><div class="card scroll"><h3>Horários de pico de inscrição (dia da semana × hora)</h3>'+grid+'</div>'}
+
+function vQual(rs){
+ var all=S.records,rp=S.report||{},t=rs.length;
+ var c=function(fn){return rs.filter(fn).length};
+ var des=rs.filter(function(r){return r.o===7});
+ var items=[
+  ['Registros no arquivo',fi(all.length)],['Registros de teste detectados',fi(rp.tests||0)],['Identificadores duplicados',fi(rp.dup||0)],
+  ['Sem responsável',fi(c(function(r){return!r.re}))+' ('+fp(pc(c(function(r){return!r.re}),t))+')'],
+  ['Sem oferta de curso',fi(c(function(r){return!r.of}))+' ('+fp(pc(c(function(r){return!r.of}),t))+')'],
+  ['Sem processo seletivo',fi(c(function(r){return!r.pr}))],['Sem canal',fi(c(function(r){return!r.ca}))],
+  ['Sem data de criação válida',fi(c(function(r){return!r.cr}))],['Sem identificador da pessoa',fi(c(function(r){return!r.pid}))],
+  ['Desistências sem observação',fi(des.filter(function(r){return!r.op}).length)+' de '+fi(des.length)],
+  ['Colunas não encontradas',(rp.missing&&rp.missing.length)?rp.missing.join(', '):'nenhuma'],
+  ['Etapas não reconhecidas',Object.keys(rp.unknown||{}).length?Object.keys(rp.unknown).map(function(k){return k+' ('+rp.unknown[k]+')'}).join(', '):'nenhuma']];
+ var pessoas={};all.forEach(function(r){if(r.pid)pessoas[r.pid]=(pessoas[r.pid]||0)+1});
+ var multi=Object.keys(pessoas).filter(function(k){return pessoas[k]>1}).length;
+ items.push(['Pessoas com mais de um registro',fi(multi)+' (mantidas; registros não são deduplicados)']);
+ return'<div class="card"><h3>Qualidade dos dados</h3><table><tbody>'+items.map(function(i){return'<tr><td>'+i[0]+'</td><td class="r"><b>'+i[1]+'</b></td></tr>'}).join('')+'</tbody></table><p class="note">Indicadores de qualidade respeitam os filtros ativos, exceto os totais do arquivo.</p></div>'}
+
+/* ===================== METAS POR MÊS ===================== */
+var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function mesLabel(k){var p=k.split('-');return MESES[+p[1]-1]+'/'+p[0]}
+function matPorMes(rs){
+ var m={};
+ rs.forEach(function(r){
+  if(r.o===6&&r.ga){
+   var k=r.ga.getFullYear()+'-'+String(r.ga.getMonth()+1).padStart(2,'0');
+   m[k]=(m[k]||0)+1}});
+ return m}
+function cardMeses(rs){
+ var g=S.goals.mes||{},real=matPorMes(rs),keys={};
+ Object.keys(g).forEach(function(k){keys[k]=1});
+ Object.keys(real).forEach(function(k){keys[k]=1});
+ var lista=Object.keys(keys).sort();
+ var tr=lista.map(function(k){
+  var meta=g[k]||0,r=real[k]||0,p=pc(r,meta);
+  return'<tr><td><b>'+mesLabel(k)+'</b></td>'
+  +'<td class="r"><input class="meta" type="number" min="0" value="'+(meta||'')+'" onchange="setMes(\''+k+'\',this.value)"></td>'
+  +'<td class="r"><b>'+fi(r)+'</b></td>'
+  +'<td class="r">'+(meta?fi(Math.max(meta-r,0)):'—')+'</td>'
+  +'<td style="min-width:200px"><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="flex:1;height:14px"><div style="width:'+Math.min(p*100,100)+'%;background:'+toneColor(p)+'"></div></div><b class="'+tone(p)+'" style="width:50px;text-align:right">'+(meta?fp(p):'—')+'</b></div></td>'
+  +'<td class="r">'+(k in g?'<button onclick="delMes(\''+k+'\')">Remover</button>':'')+'</td></tr>'}).join('');
+ var totMeta=0,totReal=0;
+ lista.forEach(function(k){totMeta+=g[k]||0;totReal+=real[k]||0});
+ return'<div class="card scroll"><h3>Metas por mês</h3>'
+ +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px">'
+ +'<label class="note">Adicionar mês <input type="month" id="novoMes" style="height:30px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px"></label>'
+ +'<button class="pri" onclick="addMes()">Adicionar</button></div>'
+ +'<table><thead><tr><th>Mês</th><th class="r">Meta</th><th class="r">Matrículas</th><th class="r">Faltam</th><th>Progresso</th><th></th></tr></thead><tbody>'
+ +(tr||'<tr><td colspan="6" class="note">Nenhum mês cadastrado. Use "Adicionar mês".</td></tr>')
+ +'</tbody><tfoot><tr><td><b>Total</b></td><td class="r"><b>'+fi(totMeta)+'</b></td><td class="r"><b>'+fi(totReal)+'</b></td><td></td><td></td><td></td></tr></tfoot></table>'
+ +'<p class="note">Matrículas contadas pelo mês de "Momento do último ganho". Farol: verde ≥ 90%, amarelo 60–89%, vermelho < 60%. As metas ficam salvas neste navegador.</p></div>'}
+function setMes(k,v){if(!S.goals.mes)S.goals.mes={};S.goals.mes[k]=Number(v)||0;saveGoals();renderContent()}
+function addMes(){
+ var v=document.getElementById('novoMes').value;
+ if(!v){alert('Escolha um mês.');return}
+ if(!S.goals.mes)S.goals.mes={};
+ if(!(v in S.goals.mes))S.goals.mes[v]=0;
+ saveGoals();renderContent()}
+function delMes(k){
+ if(!confirm('Remover a meta de '+mesLabel(k)+'?'))return;
+ delete S.goals.mes[k];saveGoals();renderContent()}
+
+/* ===================== RENDER ===================== */
+function sel(label,key,opts){
+ return'<label>'+label+'<select onchange="setF(\''+key+'\',this.value)"><option value="">Todos</option>'+opts.map(function(o){return'<option value="'+esc(o)+'"'+(S.f[key]===o?' selected':'')+'>'+esc(o)+'</option>'}).join('')+'</select></label>'}
+function renderFilters(){
+ var R=S.records;
+ document.getElementById('filtros').innerHTML='<div class="card"><div class="filters">'
+ +'<label>Criação de<input type="date" value="'+S.f.from+'" onchange="setF(\'from\',this.value)"></label>'
+ +'<label>Criação até<input type="date" value="'+S.f.to+'" onchange="setF(\'to\',this.value)"></label>'
+ +sel('Processo seletivo','processo',uniq(R,function(r){return r.pr}))
+ +sel('Curso','curso',uniq(R,function(r){return r.cu}))
+ +sel('Turno','turno',uniq(R,function(r){return r.tu}))
+ +sel('Responsável','resp',uniq(R,function(r){return r.re||SEM_RESP}))
+ +sel('Canal','canal',uniq(R,function(r){return r.ca}))
+ +'<label>&nbsp;<span style="display:flex;gap:8px;align-items:center;height:32px"><input type="checkbox" '+(S.f.excluirTestes?'checked':'')+' onchange="setF(\'excluirTestes\',this.checked)"> Excluir testes</span></label>'
+ +'<label>&nbsp;<button onclick="resetF()">Limpar filtros</button></label></div></div>'}
+function renderContent(){
+ var rs=filtered(),v={visao:vVisao,cursos:vCursos,time:vTime,desist:vDesist,tempo:vTempo,qual:vQual}[S.tab];
+ document.getElementById('conteudo').innerHTML=(rs.length?v(rs):'<div class="card"><p>Nenhum registro para os filtros selecionados.</p></div>')}
+function renderTabs(){
+ document.getElementById('abas').innerHTML=TABS.map(function(t){return'<button class="'+(S.tab===t[0]?'on':'')+'" onclick="setTab(\''+t[0]+'\')">'+t[1]+'</button>'}).join('')}
+function render(){
+ var app=document.getElementById('app'),sub=document.getElementById('sub');
+ if(!S.records.length){
+  sub.textContent='Graduação · Presencial, EAD e Semipresencial';
+  document.getElementById('btnLoad').textContent='Carregar base (CSV)';
+  app.innerHTML='<div class="drop" id="drop"><p style="font-size:18px;font-weight:600">Arraste aqui a exportação do CRM (.csv)</p><p class="note" style="max-width:480px;margin:8px auto 16px">O arquivo é lido apenas no seu navegador. Nome, CPF, e-mail, telefone e data de nascimento não são armazenados.</p><button class="pri" onclick="document.getElementById(\'file\').click()">Selecionar arquivo</button></div>';
+  bindDrop();return}
+ sub.textContent=S.fileName+' · carregado em '+S.loadedAt;
+ document.getElementById('btnLoad').textContent='Atualizar base (CSV)';
+ var rp=S.report||{},w=[];
+ if(rp.missing&&rp.missing.length)w.push('colunas não encontradas: '+rp.missing.join(', '));
+ if(rp.unknown&&Object.keys(rp.unknown).length)w.push('etapas não reconhecidas: '+Object.keys(rp.unknown).map(function(k){return k+' ('+rp.unknown[k]+')'}).join(', '));
+ if(rp.dup)w.push(rp.dup+' identificadores duplicados');
+ if(rp.tests)w.push(rp.tests+' registros de teste detectados');
+ app.innerHTML=(w.length?'<div class="warn"><b>Atenção à qualidade da base:</b> '+w.join('; ')+'.</div>':'')+'<div id="filtros"></div><div class="tabs" id="abas"></div><div id="conteudo"></div>';
+ renderFilters();renderTabs();renderContent()}
+
+/* ===================== AÇÕES ===================== */
+function setF(k,v){S.f[k]=v;renderContent()}
+function resetF(){S.f={from:'',to:'',processo:'',curso:'',turno:'',resp:'',canal:'',excluirTestes:true};renderFilters();renderContent()}
+function setTab(t){S.tab=t;renderTabs();renderContent()}
+function pickResp(r){S.f.resp=r;renderFilters();renderContent()}
+function setGeral(v){S.goals.geral=Number(v)||0;saveGoals();renderContent()}
+function setInd(r,v){S.goals.ind[r]=Number(v)||0;saveGoals();renderContent()}
+function toggleTV(){document.body.classList.toggle('tv');if(document.body.classList.contains('tv')){S.tab='time';renderTabs();renderContent()}}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')document.body.classList.remove('tv')});
+
+function handleFile(file){
+ if(!file)return;
+ var msg=document.getElementById('msg');msg.innerHTML='';
+ file.arrayBuffer().then(function(buf){
+  try{
+   var res=buildRecords(decodeFile(buf));
+   if(!res.records.length)throw new Error('Nenhum registro encontrado no arquivo.');
+   S.records=res.records;S.report=res.report;S.fileName=file.name;S.loadedAt=new Date().toLocaleString('pt-BR');
+   saveData();render()
+  }catch(e){msg.innerHTML='<div class="err">'+esc(e.message)+'</div>'}
+ })}
+document.getElementById('file').addEventListener('change',function(e){handleFile(e.target.files[0]);e.target.value=''});
+function bindDrop(){
+ var d=document.getElementById('drop');if(!d)return;
+ d.addEventListener('dragover',function(e){e.preventDefault();d.classList.add('over')});
+ d.addEventListener('dragleave',function(){d.classList.remove('over')});
+ d.addEventListener('drop',function(e){e.preventDefault();d.classList.remove('over');handleFile(e.dataTransfer.files[0])})}
+
+loadSaved();render();
+</script>
+</body>
+</html>
