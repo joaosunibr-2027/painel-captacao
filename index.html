@@ -92,13 +92,15 @@ var COLS={
 };
 var SEM_RESP='Sem responsável';
 var KEY='painel-captacao-v2',KEYG='painel-captacao-metas-v2';
+var KEYP='painel-captacao-prev-v1';
 var DIAS=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 
 /* ===================== ESTADO ===================== */
 var S={records:[],report:null,fileName:'',loadedAt:'',tab:'visao',
  f:{from:'',to:'',processo:'',curso:'',turno:'',resp:'',canal:'',excluirTestes:true},
- goals:{geral:0,ind:{},mes:{}}};
-var TABS=[['visao','Visão Executiva'],['cursos','Cursos'],['time','Time e Metas'],['desist','Desistências'],['tempo','Tempo'],['qual','Qualidade']];
+ goals:{geral:0,ind:{},mes:{}},
+ prev:null,cmp:{procA:'',procB:'',startA:'',startB:''}};
+var TABS=[['visao','Visão Executiva'],['cursos','Cursos'],['time','Time e Metas'],['desist','Desistências'],['tempo','Tempo'],['qual','Qualidade'],['comp','Comparativo 2027/1 × 2026/1']];
 
 /* ===================== UTIL ===================== */
 function norm(s){return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()}
@@ -166,7 +168,8 @@ function loadSaved(){
  try{var raw=localStorage.getItem(KEY);if(raw){var s=JSON.parse(raw);S.records=s.records.map(revive);S.report=s.report;S.fileName=s.fileName;S.loadedAt=s.loadedAt}}catch(e){}
  try{var g=localStorage.getItem(KEYG);if(g)S.goals=JSON.parse(g)}catch(e){}
  if(!S.goals.ind)S.goals.ind={};
- if(!S.goals.mes)S.goals.mes={};}
+ if(!S.goals.mes)S.goals.mes={};
+ try{var p=localStorage.getItem(KEYP);if(p){S.prev=JSON.parse(p);S.prev.records=S.prev.records.map(revive)}}catch(e){S.prev=null}}
 function saveGoals(){try{localStorage.setItem(KEYG,JSON.stringify(S.goals))}catch(e){}}
 function clearData(){
  if(!confirm('Remover os dados carregados deste navegador? As metas serão mantidas.'))return;
@@ -355,6 +358,128 @@ function delMes(k){
  if(!confirm('Remover a meta de '+mesLabel(k)+'?'))return;
  delete S.goals.mes[k];saveGoals();renderContent()}
 
+/* ===================== COMPARATIVO ENTRE PROCESSOS ===================== */
+function dayStart(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
+function offs(d,start){return Math.round((dayStart(d)-start)/86400000)}
+function minDate(rs){var m=null;rs.forEach(function(r){if(r.cr&&(!m||r.cr<m))m=r.cr});return m}
+function maxDate(rs,fb){var m=null;rs.forEach(function(r){[r.cr,r.ga].forEach(function(d){if(d&&(!m||d>m))m=d})});return m||fb}
+function cmpFilter(list,proc){
+ var f=S.f;
+ return list.filter(function(r){
+  if(f.excluirTestes&&r.t)return false;
+  if(proc&&r.pr!==proc)return false;
+  if(f.curso&&r.cu!==f.curso)return false;
+  if(f.turno&&r.tu!==f.turno)return false;
+  if(f.canal&&r.ca!==f.canal)return false;
+  return true})}
+function cumSeries(rs,start,maxD,kind){
+ var a=[],i;for(i=0;i<=maxD;i++)a.push(0);
+ rs.forEach(function(r){
+  var d=kind==='reg'?r.cr:(r.o===6?r.ga:null);if(!d)return;
+  var o=offs(d,start);if(o<0)o=0;if(o<=maxD)a[o]++});
+ for(i=1;i<=maxD;i++)a[i]+=a[i-1];
+ return a}
+function stats(rs,start,N){
+ var s={reg:0,mat:0,tot:0,des:0};
+ rs.forEach(function(r){
+  if(r.cr&&offs(r.cr,start)<=N)s.reg++;
+  if(r.o===6){s.tot++;if(r.ga&&offs(r.ga,start)<=N)s.mat++}
+  if(r.o===7)s.des++});
+ return s}
+function byCurso(rs){var m={};rs.forEach(function(r){var k=r.cu||'Sem curso';(m[k]=m[k]||[]).push(r)});return m}
+function dlt(a,b){var d=a-b;return(d>0?'+':'')+fi(d)}
+function dlp(a,b){if(!b)return'—';var v=(a-b)/b;return(v>0?'+':'')+fp(v)}
+function dcls(a,b){return a>b?'green':a<b?'red':''}
+
+function lineChart(lines,maxD,N){
+ var W=900,H=280,P=42,mx=1;
+ lines.forEach(function(l){l.d.forEach(function(v,i){if(i<=l.upTo&&v>mx)mx=v})});
+ var X=function(i){return P+(maxD>0?i/maxD:0.5)*(W-P-10)};
+ var Y=function(v){return H-P-(v/mx)*(H-P-12)};
+ var s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto">';
+ [0,0.5,1].forEach(function(t){var y=Y(mx*t);s+='<line x1="'+P+'" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#e2e8f0"/><text x="4" y="'+(y+4)+'" font-size="11" fill="#64748b">'+Math.round(mx*t)+'</text>'});
+ [0,Math.round(maxD/2),maxD].forEach(function(i){s+='<text x="'+X(i)+'" y="'+(H-14)+'" font-size="11" fill="#64748b" text-anchor="middle">D+'+i+'</text>'});
+ s+='<line x1="'+X(N)+'" y1="12" x2="'+X(N)+'" y2="'+(H-P)+'" stroke="#94a3b8" stroke-dasharray="4 4"/><text x="'+X(N)+'" y="10" font-size="11" fill="#64748b" text-anchor="middle">hoje (D+'+N+')</text>';
+ lines.forEach(function(l){
+  var pts=[];for(var i=0;i<=l.upTo&&i<l.d.length;i++)pts.push(X(i).toFixed(1)+','+Y(l.d[i]).toFixed(1));
+  s+='<polyline fill="none" stroke="'+l.c+'" stroke-width="2.5" points="'+pts.join(' ')+'"/>'});
+ return s+'</svg>'}
+
+function selCmp(label,key,opts){
+ return'<label class="note">'+label+'<br><select onchange="setCmp(\''+key+'\',this.value)" style="height:30px;border:1px solid #cbd5e1;border-radius:6px;min-width:150px"><option value="">Todos</option>'+opts.map(function(o){return'<option value="'+esc(o)+'"'+(S.cmp[key]===o?' selected':'')+'>'+esc(o)+'</option>'}).join('')+'</select></label>'}
+function setCmp(k,v){S.cmp[k]=v;renderContent()}
+function savePrev(){try{localStorage.setItem(KEYP,JSON.stringify(S.prev))}catch(e){alert('Não foi possível salvar a base anterior neste navegador (limite de armazenamento). Ela ficará disponível só até fechar a página.')}}
+function clearPrev(){
+ if(!confirm('Remover a base de 2026/1 deste navegador?'))return;
+ try{localStorage.removeItem(KEYP)}catch(e){}
+ S.prev=null;S.cmp={procA:'',procB:'',startA:'',startB:''};renderContent()}
+function handlePrev(file){
+ if(!file)return;
+ var msg=document.getElementById('msg');msg.innerHTML='';
+ file.arrayBuffer().then(function(buf){
+  try{
+   var res=buildRecords(decodeFile(buf));
+   S.prev={records:res.records,fileName:file.name,loadedAt:new Date().toLocaleString('pt-BR')};
+   S.cmp.procB='';S.cmp.startB='';savePrev();renderContent()
+  }catch(e){msg.innerHTML='<div class="err">'+esc(e.message)+'</div>'}})}
+
+function cmpControls(sA,sB){
+ var h='<div class="card"><h3>Base do processo anterior (2026/1)</h3><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">'
+ +'<input type="file" accept=".csv,.txt" onchange="handlePrev(this.files[0]);this.value=\'\'">'
+ +(S.prev?'<span class="note">'+esc(S.prev.fileName)+' · '+fi(S.prev.records.length)+' registros · carregado em '+esc(S.prev.loadedAt)+'</span><button onclick="clearPrev()">Remover base anterior</button>':'<span class="note">Nenhuma base carregada. Selecione a exportação do CRM do processo 2026/1.</span>')
+ +'</div>';
+ if(S.prev){
+  h+='<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-top:12px">'
+  +selCmp('Processo atual (2027/1)','procA',uniq(S.records,function(r){return r.pr}))
+  +selCmp('Processo anterior (2026/1)','procB',uniq(S.prev.records,function(r){return r.pr}))
+  +'<label class="note">Início da captação 2027/1<br><input type="date" value="'+(S.cmp.startA||(sA?dayKey(sA):''))+'" onchange="setCmp(\'startA\',this.value)" style="height:30px;border:1px solid #cbd5e1;border-radius:6px"></label>'
+  +'<label class="note">Início da captação 2026/1<br><input type="date" value="'+(S.cmp.startB||(sB?dayKey(sB):''))+'" onchange="setCmp(\'startB\',this.value)" style="height:30px;border:1px solid #cbd5e1;border-radius:6px"></label></div>'}
+ return h+'<p class="note">Este comparativo usa os filtros Curso, Turno, Canal e "Excluir testes" do topo. Os filtros de período, processo e responsável não se aplicam aqui. Use os campos acima para escolher o processo seletivo de cada base e o dia de início de cada campanha (padrão: menor data de criação da base).</p></div>'}
+
+function vComp(){
+ var A=S.records,B=S.prev?S.prev.records:null;
+ if(!A.length)return'<div class="card"><p>Carregue primeiro a base atual (botão no topo da página).</p></div>';
+ if(!B)return cmpControls(null,null);
+ var a=cmpFilter(A,S.cmp.procA),b=cmpFilter(B,S.cmp.procB);
+ var mA=minDate(a),mB=minDate(b);
+ var sA=S.cmp.startA?new Date(S.cmp.startA+'T00:00:00'):(mA?dayStart(mA):null);
+ var sB=S.cmp.startB?new Date(S.cmp.startB+'T00:00:00'):(mB?dayStart(mB):null);
+ var ctl=cmpControls(sA,sB);
+ if(!sA||!sB)return ctl+'<div class="card"><p>Sem registros com data de criação válida nos filtros atuais.</p></div>';
+ var N=Math.max(offs(maxDate(a,sA),sA),0),spanB=Math.max(offs(maxDate(b,sB),sB),0),maxD=Math.max(N,spanB,1);
+ var sa=stats(a,sA,N),sb=stats(b,sB,N);
+ var atingido=sb.tot?sa.mat/sb.tot:0;
+ var semGanhoB=b.filter(function(r){return r.o===6&&!r.ga}).length;
+ var kp='<div class="grid g6">'
+  +kpi('Dia da campanha atual','D+'+N,'Comparação no mesmo dia')
+  +kpi('Matrículas 2027/1',fi(sa.mat),'até D+'+N,'green')
+  +kpi('Matrículas 2026/1',fi(sb.mat),'no mesmo dia (D+'+N+')')
+  +kpi('Variação',dlt(sa.mat,sb.mat),dlp(sa.mat,sb.mat),dcls(sa.mat,sb.mat))
+  +kpi('Registros 2027/1 × 2026/1',fi(sa.reg)+' × '+fi(sb.reg),'criados até D+'+N)
+  +kpi('Total final 2026/1',fi(sb.tot),'já atingimos '+fp(atingido)+' desse total')
+  +'</div>';
+ var cm=[{c:'#2563EB',d:cumSeries(a,sA,maxD,'mat'),upTo:N},{c:'#F59E0B',d:cumSeries(b,sB,maxD,'mat'),upTo:spanB}];
+ var cr=[{c:'#2563EB',d:cumSeries(a,sA,maxD,'reg'),upTo:N},{c:'#F59E0B',d:cumSeries(b,sB,maxD,'reg'),upTo:spanB}];
+ var leg='<div class="note"><span class="dot" style="background:#2563EB"></span>2027/1 &nbsp; <span class="dot" style="background:#F59E0B"></span>2026/1 · eixo horizontal: dias desde o início de cada campanha</div>';
+ var charts='<div class="grid g2"><div class="card"><h3>Matrículas acumuladas (por data do último ganho)</h3>'+lineChart(cm,maxD,N)+leg+'</div>'
+  +'<div class="card"><h3>Registros criados acumulados</h3>'+lineChart(cr,maxD,N)+leg+'</div></div>';
+ var gA=byCurso(a),gB=byCurso(b),keys={};
+ Object.keys(gA).forEach(function(k){keys[k]=1});Object.keys(gB).forEach(function(k){keys[k]=1});
+ var rows=Object.keys(keys).map(function(k){
+  return{k:k,a:stats(gA[k]||[],sA,N),b:stats(gB[k]||[],sB,N)}}).sort(function(x,y){return y.a.mat-x.a.mat||y.b.mat-x.b.mat||x.k.localeCompare(y.k,'pt-BR')});
+ var tr=rows.map(function(r){
+  return'<tr><td><b>'+esc(r.k)+'</b></td><td class="r">'+fi(r.a.reg)+'</td><td class="r"><b>'+fi(r.a.mat)+'</b></td><td class="r">'+fi(r.b.reg)+'</td><td class="r"><b>'+fi(r.b.mat)+'</b></td><td class="r">'+fi(r.b.tot)+'</td><td class="r '+dcls(r.a.mat,r.b.mat)+'"><b>'+dlt(r.a.mat,r.b.mat)+'</b></td><td class="r '+dcls(r.a.mat,r.b.mat)+'">'+dlp(r.a.mat,r.b.mat)+'</td></tr>'}).join('');
+ var tbl='<div class="card scroll"><h3>Comparativo por curso (mesmo dia da campanha)</h3><table><thead><tr><th>Curso</th><th class="r">Registros 27/1</th><th class="r">Matr. 27/1</th><th class="r">Registros 26/1</th><th class="r">Matr. 26/1</th><th class="r">Matr. 26/1 (final)</th><th class="r">Δ matr.</th><th class="r">Δ %</th></tr></thead><tbody>'+tr
+  +'</tbody><tfoot><tr><td><b>Total</b></td><td class="r"><b>'+fi(sa.reg)+'</b></td><td class="r"><b>'+fi(sa.mat)+'</b></td><td class="r"><b>'+fi(sb.reg)+'</b></td><td class="r"><b>'+fi(sb.mat)+'</b></td><td class="r"><b>'+fi(sb.tot)+'</b></td><td class="r"><b>'+dlt(sa.mat,sb.mat)+'</b></td><td class="r"><b>'+dlp(sa.mat,sb.mat)+'</b></td></tr></tfoot></table>'
+  +'<p class="note">Registros e matrículas de 2026/1 contados até o mesmo dia (D+'+N+') da respectiva campanha. "Curso" agrupa os turnos; para um turno específico, use o filtro Turno. Para ver a evolução de um único curso nos gráficos, use o filtro Curso do topo.</p></div>';
+ var fr=STAGES.map(function(st){
+  var ca=cnt(a,st.o),cb=cnt(b,st.o);
+  return'<tr><td><span class="dot" style="background:'+st.c+'"></span>'+st.l+'</td><td class="r"><b>'+fi(ca)+'</b></td><td class="r">'+fp(pc(ca,a.length))+'</td><td class="r"><b>'+fi(cb)+'</b></td><td class="r">'+fp(pc(cb,b.length))+'</td></tr>'}).join('');
+ var funil='<div class="card scroll"><h3>Distribuição por etapa (situação atual de cada base)</h3><table><thead><tr><th>Etapa</th><th class="r">2027/1</th><th class="r">% registros</th><th class="r">2026/1</th><th class="r">% registros</th></tr></thead><tbody>'+fr+'</tbody></table>'
+  +'<p class="note">Cada base é um retrato da etapa atual no dia da exportação. A base de 2026/1, por ser de campanha encerrada ou mais avançada, tem registros mais adiante no funil. Isto não é taxa de conversão de coorte.</p></div>';
+ var aviso=semGanhoB?'<div class="warn">'+fi(semGanhoB)+' registros matriculados em 2026/1 não têm "Momento do último ganho" e não entram na evolução diária, apenas no total final.</div>':'';
+ return ctl+aviso+kp+charts+tbl+funil}
+
 /* ===================== RENDER ===================== */
 function sel(label,key,opts){
  return'<label>'+label+'<select onchange="setF(\''+key+'\',this.value)"><option value="">Todos</option>'+opts.map(function(o){return'<option value="'+esc(o)+'"'+(S.f[key]===o?' selected':'')+'>'+esc(o)+'</option>'}).join('')+'</select></label>'}
@@ -371,8 +496,10 @@ function renderFilters(){
  +'<label>&nbsp;<span style="display:flex;gap:8px;align-items:center;height:32px"><input type="checkbox" '+(S.f.excluirTestes?'checked':'')+' onchange="setF(\'excluirTestes\',this.checked)"> Excluir testes</span></label>'
  +'<label>&nbsp;<button onclick="resetF()">Limpar filtros</button></label></div></div>'}
 function renderContent(){
+ var el=document.getElementById('conteudo');
+ if(S.tab==='comp'){el.innerHTML=vComp();return}
  var rs=filtered(),v={visao:vVisao,cursos:vCursos,time:vTime,desist:vDesist,tempo:vTempo,qual:vQual}[S.tab];
- document.getElementById('conteudo').innerHTML=(rs.length?v(rs):'<div class="card"><p>Nenhum registro para os filtros selecionados.</p></div>')}
+ el.innerHTML=(rs.length?v(rs):'<div class="card"><p>Nenhum registro para os filtros selecionados.</p></div>')}
 function renderTabs(){
  document.getElementById('abas').innerHTML=TABS.map(function(t){return'<button class="'+(S.tab===t[0]?'on':'')+'" onclick="setTab(\''+t[0]+'\')">'+t[1]+'</button>'}).join('')}
 function render(){
